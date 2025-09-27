@@ -1,0 +1,3 @@
+Please place your raw video file (e.g., my_video.mp4) in this root directory.
+
+The script will use this video as input.
