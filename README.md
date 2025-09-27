@@ -111,7 +111,3 @@ This project has a lot of potential for growth. Future enhancements could includ
 - [ ] **GPU Acceleration:** Offloading transcription and rendering to a GPU for significant speed improvements.
 
 ---
-
-## 🔑 Keywords & Tags
-
-`video-editing`, `ai-video-editor`, `python`, `automations`, `llm`, `generative-ai`, `social-media`, `ugc`, `content-creation`, `moviepy`, `faster-whisper`, `ffmpeg`, `video-automation`
