@@ -1,0 +1,26 @@
+# Virtual Environment
+venv/
+*.venv
+
+# Environment variables
+.env
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Build and distribution artifacts
+build/
+dist/
+*.egg-info/
+
+# Asset and Output folders
+/assets/
+/output/
+
+# Temporary files
+temp_audio.mp3
+temp-audio.m4a
+temp_caption_*.png

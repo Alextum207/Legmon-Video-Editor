@@ -1,0 +1,8 @@
+moviepy
+faster-whisper
+litellm
+python-dotenv
+requests
+pexels-api
+pixabay-python
+Pillow
