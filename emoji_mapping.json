@@ -1,0 +1,78 @@
+{
+  "money-with-wings.png": [
+    "geld", "finanzen", "kosten", "kostet", "teuer", "preis", "preise", "bezahlen", "zahlung", "rechnung",
+    "miete", "semesterbeitrag", "studiengebuehren", "bafoeg", "stipendium", "nebenjob", "werkstudent", "gehalt", "lohn", "verdienst",
+    "steuern", "steuer", "steuererklaerung", "werbungskosten", "pauschale", "freibetrag", "absetzen", "sparen", "budget", "konto",
+    "kredit", "studienkredit", "schulden", "zinsen", "versicherung", "krankenversicherung", "rente", "brutto", "netto", "euro",
+    "cash", "moneten", "kohle", "rabatt", "angebot", "foerderung", "finanzierung", "lebenshaltungskosten", "sparplan", "investieren"
+  ],
+  "clock.png": [
+    "zeit", "uhr", "minute", "minuten", "stunde", "stunden", "sekunde", "sekunden", "deadline", "frist",
+    "abgabe", "pruefungstermin", "semester", "vorlesungszeit", "zeitplan", "kalender", "puenktlich", "verspaetung", "warten", "wartezeit",
+    "morgen", "heute", "gestern", "spaeter", "frueher", "schnell", "langsam", "dauer", "dauert", "kurz",
+    "lange", "zeitdruck", "aufschieben", "prokrastination", "lernplan", "routine", "alltag", "wecker", "pause", "pausen",
+    "timing", "schicht", "arbeitszeit", "regelstudienzeit", "bewerbungsfrist", "einschreibung", "termin", "termine", "wochenende", "nachts"
+  ],
+  "woman-student.png": [
+    "student", "studentin", "studierende", "studierenden", "studium", "studieren", "uni", "universitaet", "hochschule", "campus", "fakultaet",
+    "bachelor", "master", "promotion", "semester", "erstsemester", "vorlesung", "seminar", "uebung", "tutorium", "klausur",
+    "pruefung", "hausarbeit", "abschlussarbeit", "bachelorarbeit", "masterarbeit", "ects", "modul", "modulhandbuch", "immatrikulation", "exmatrikulation",
+    "nc", "numerus", "clausus", "lernen", "lernphase", "skript", "folien", "mensa", "bibliothek", "bib",
+    "dozent", "kommilitone", "kommilitonin", "studiengang", "studienberatung", "praktikum", "auslandssemester", "werkstudentin", "karrierestart", "campusleben"
+  ],
+  "handschlag-removebg-preview.png": [
+    "handschlag", "deal", "vertrag", "arbeitsvertrag", "kooperation", "zusammenarbeit", "team", "partner", "partnerschaft", "netzwerk",
+    "networking", "linkedin", "kontakt", "kontakte", "vitamin", "bewerbung", "bewerben", "lebenslauf", "anschreiben", "vorstellungsgespraech",
+    "karriere", "job", "jobs", "praktikum", "werkstudent", "trainee", "einstieg", "berufseinstieg", "chef", "chefin",
+    "kollege", "kollegin", "mentor", "mentorin", "empfehlung", "referenz", "angebot", "zusage", "gehaltsverhandlung", "verhandlung",
+    "kunden", "business", "startup", "gruendung", "community", "hilfe", "unterstuetzung", "zusammenhalt", "erfolg", "chance"
+  ],
+  "people holding hands.png": [
+    "community", "gemeinschaft", "gruppe", "team", "teams", "menschen", "miteinander", "zusammen", "zusammenhalt", "zusammengehoerigkeit",
+    "vereint", "vereinen", "vereinigung", "verbunden", "verbinden", "verbindung", "persoenlich", "persoenliche", "persoenlicher", "persoenliches",
+    "interaktiv", "eng", "nah", "naehe", "beziehung", "beziehungen", "kontakt", "kontakte", "netzwerk", "netzwerken",
+    "alumni", "alumnus", "kommilitonen", "freunde", "freundschaft", "familiaer", "communitygefuehl", "zusammenarbeit"
+  ],
+  "haus.png": [
+    "haus", "wohnung", "wg", "wgzimmer", "wohnheim", "studentenwohnheim", "miete", "kaution", "nebenkosten", "zimmer",
+    "umzug", "einzug", "auszug", "wohnen", "zuhause", "heimat", "campus", "bibliothek", "mensa", "hoersaal",
+    "seminarraum", "buero", "office", "unternehmen", "firma", "arbeitsplatz", "homeoffice", "fernuni", "onlineuni", "unterkunft",
+    "immobilie", "vermieter", "mietvertrag", "wohnungsmarkt", "stadt", "studienstadt", "pendeln", "bahn", "adresse", "meldebescheinigung",
+    "rundfunkbeitrag", "strom", "internet", "moebel", "schreibtisch", "kueche", "bad", "zimmerbesichtigung", "lage", "wohnkosten"
+  ],
+  "thinking-removebg-preview.png": [
+    "warum", "wieso", "weshalb", "wie", "was", "wer", "wo", "wann", "frage", "fragen",
+    "denken", "nachdenken", "ueberlegen", "gruebeln", "verstehen", "erklaeren", "erklaerung", "logik", "logisch", "unlogisch",
+    "zweifel", "unsicher", "entscheidung", "entscheiden", "option", "alternativen", "mythos", "stimmt", "wahr", "falsch",
+    "beweis", "fakt", "faktencheck", "recherche", "tipp", "trick", "strategie", "problem", "loesung", "kompliziert",
+    "einfach", "aha", "checken", "wissen", "kenntnis", "lernen", "analyse", "vergleich", "sinn", "planung"
+  ],
+  "rocket.png": [
+    "rakete", "durchstarten", "start", "boost", "wachstum", "karriereboost", "aufstieg", "befoerderung", "erfolg", "ziel",
+    "ziele", "motivation", "drive", "produktiver", "produktivitaet", "leistung", "performen", "skalieren", "startup", "gruenden",
+    "gruendung", "launch", "bewerbungserfolg", "traumjob", "chance", "durchbruch", "speed", "schneller", "besser", "maximieren",
+    "optimieren", "levelup", "upgrade", "fortschritt", "erreichen", "gewinnen", "gewinner", "potential", "ambition", "vision",
+    "zukunft", "plan", "strategie", "karriere", "jobstart", "praktikum", "werkstudent", "abschluss", "nextlevel", "energie"
+  ],
+  "professor.png": [
+    "professor", "professorin", "prof", "dozent", "dozentin", "pruefer", "prueferin", "lehrstuhl", "institut", "forschung",
+    "wissenschaft", "wissenschaftler", "doktor", "dr", "doktorand", "doktorandin", "promotion", "sprechstunde", "korrektur", "bewertung",
+    "note", "noten", "gutachten", "feedback", "betreuer", "betreuerin", "seminarleiter", "tutor", "tutorin", "lehre",
+    "vorlesung", "pruefung", "klausur", "muendlich", "hausarbeit", "abschlussarbeit", "thesis", "zitation", "quelle", "quellen",
+    "literatur", "paper", "studie", "studienlage", "akademisch", "fakultaet", "dekan", "modul", "curriculum", "fachbereich"
+  ],
+  "stress.png": [
+    "stress", "druck", "zeitdruck", "panik", "angst", "pruefungsangst", "ueberfordert", "burnout", "krise", "problem",
+    "probleme", "fehler", "durchgefallen", "nichtbestanden", "katastrophe", "chaos", "deadline", "abgabe", "lastminute", "schlafmangel",
+    "muedigkeit", "nervoes", "nervositaet", "sorgen", "zweifel", "verzweifelt", "blockade", "lernblockade", "prokrastination", "aufschieben",
+    "ueberlastung", "streit", "finanzdruck", "mietstress", "steuerstress", "bewerbungsstress", "absage", "scheitern", "versagen", "riskant",
+    "gefahr", "warnung", "schlimm", "hart", "kompliziert", "verwirrt", "unfair", "kritisch", "notfall", "deadlinepanik"
+  ],
+  "mind-blown.png": [
+    "mythos", "mythen", "wahrheit", "fakten", "fakt", "geheimnis", "geheimtipp", "trick", "tricks", "hack",
+    "lifehack", "unglaublich", "krass", "unfassbar", "schock", "schockierend", "mindblown", "aha", "ueberraschung", "ueberrascht",
+    "illegal", "legal", "steuertrick", "steuermythos", "karrieremythos", "studienmythos", "bafoegmythos", "irrtum", "irrtuemer", "falsch",
+    "richtig", "aufgedeckt", "geheim", "niemand", "wissen", "wusste", "glauben", "glaubst", "geruecht", "geruechte",
+    "realitaet", "realistisch", "faktencheck", "check", "entlarvt", "versteckt", "unbekannt", "insider", "tatsaechlich", "plotwist"
+  ]
+}

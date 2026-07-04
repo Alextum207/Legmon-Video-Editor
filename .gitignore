@@ -19,9 +19,10 @@ build/
 dist/
 *.egg-info/
 
-# Asset and Output folders
-/assets/
+# Generated media folders
 /output/
+/roh_videos/
+/finished_videos/
 
 # Temporary files
 temp_audio.mp3

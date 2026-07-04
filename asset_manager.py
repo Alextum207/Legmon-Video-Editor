@@ -12,6 +12,9 @@ ASSET_DIR = "assets"
 if not os.path.exists(ASSET_DIR):
     os.makedirs(ASSET_DIR)
 
+def is_placeholder_api_key(api_key):
+    return not api_key or api_key.strip().upper().startswith("YOUR_")
+
 def download_file(url, local_filename):
     try:
         with requests.get(url, stream=True) as r:
@@ -26,8 +29,8 @@ def download_file(url, local_filename):
         return None
 
 def get_audio_asset(api_key, query, media_type):
-    if not api_key:
-        logging.error(f"Pixabay API key not found for {media_type}.")
+    if is_placeholder_api_key(api_key):
+        logging.info(f"Pixabay API key is not configured. Skipping {media_type} download for '{query}'.")
         return None
     try:
         params = {
