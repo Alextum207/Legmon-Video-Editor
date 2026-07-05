@@ -58,7 +58,7 @@ def resolve_output_path(output_name):
     return os.path.join(FINISHED_VIDEO_DIR, output_name)
 
 
-def process_video(input_video_path=None, output_name=DEFAULT_OUTPUT_NAME, transcript_path=None, progress_callback=None):
+def process_video(input_video_path=None, output_name=DEFAULT_OUTPUT_NAME, transcript_path=None, progress_callback=None, edit_settings=None):
     ensure_project_directories()
     assets = {'b_roll': {}, 'sfx': {}, 'music': None}
     progress_callback = progress_callback or (lambda percent, message: None)
@@ -133,6 +133,7 @@ def process_video(input_video_path=None, output_name=DEFAULT_OUTPUT_NAME, transc
         assets=assets,
         output_path=output_file_path,
         transcript=word_transcript,
+        edit_settings=edit_settings,
     )
 
     progress_callback(100, "Done")
@@ -145,9 +146,15 @@ def main():
     parser.add_argument("--input_video", help="Input video path. Relative names are resolved inside roh_videos/. If omitted, the only video in roh_videos/ is used.")
     parser.add_argument("--output_name", default=DEFAULT_OUTPUT_NAME, help="Output filename. Relative names are saved inside finished_videos/.")
     parser.add_argument("--transcript", help="Optional subtitle/transcript path. Supports timestamped txt/srt-like text.")
+    parser.add_argument("--video_type", choices=["interview", "information"], help="Survey answer for the video type.")
+    parser.add_argument("--interview_subject_side", choices=["left", "right", "auto"], help="Survey answer for the interview respondent side.")
     args = parser.parse_args()
+    edit_settings = {
+        "video_type": args.video_type,
+        "interview_subject_side": args.interview_subject_side,
+    }
     try:
-        process_video(args.input_video, args.output_name, args.transcript)
+        process_video(args.input_video, args.output_name, args.transcript, edit_settings=edit_settings)
     except Exception as e:
         logging.error(e)
 

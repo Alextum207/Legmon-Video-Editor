@@ -27,7 +27,7 @@ def _set_job_progress(job_id, percent, message):
     jobs[job_id]["message"] = message
 
 
-def _run_job(job_id, video_path, transcript_path, use_turboscribe):
+def _run_job(job_id, video_path, transcript_path, use_turboscribe, edit_settings):
     try:
         os.makedirs(FINISHED_VIDEO_DIR, exist_ok=True)
         source_name = os.path.splitext(os.path.basename(video_path))[0]
@@ -47,6 +47,7 @@ def _run_job(job_id, video_path, transcript_path, use_turboscribe):
             output_name=output_path,
             transcript_path=transcript_path,
             progress_callback=lambda percent, message: _set_job_progress(job_id, percent, message),
+            edit_settings=edit_settings,
         )
         jobs[job_id].update({
             "status": "done",
@@ -72,6 +73,8 @@ def create_job():
     video = request.files.get("video")
     subtitle = request.files.get("subtitle")
     use_turboscribe = request.form.get("use_turboscribe") == "on"
+    video_type = request.form.get("video_type") or "interview"
+    interview_subject_side = request.form.get("interview_subject_side") or "auto"
 
     if not video or not video.filename:
         return jsonify({"error": "Upload a raw video first."}), 400
@@ -79,6 +82,10 @@ def create_job():
         return jsonify({"error": "Unsupported video format."}), 400
     if subtitle and subtitle.filename and not _allowed_file(subtitle.filename, SUBTITLE_EXTENSIONS):
         return jsonify({"error": "Unsupported subtitle format. Use .txt, .srt, or .vtt."}), 400
+    if video_type not in {"interview", "information"}:
+        return jsonify({"error": "Choose interview or information video."}), 400
+    if interview_subject_side not in {"left", "right", "auto"}:
+        return jsonify({"error": "Choose the respondent side or auto."}), 400
 
     job_id = uuid.uuid4().hex
     job_path = os.path.join(JOB_DIR, job_id)
@@ -100,8 +107,12 @@ def create_job():
         "message": "Queued",
         "output_path": None,
     }
+    edit_settings = {
+        "video_type": video_type,
+        "interview_subject_side": interview_subject_side,
+    }
 
-    worker = threading.Thread(target=_run_job, args=(job_id, video_path, transcript_path, use_turboscribe), daemon=True)
+    worker = threading.Thread(target=_run_job, args=(job_id, video_path, transcript_path, use_turboscribe, edit_settings), daemon=True)
     worker.start()
     return jsonify({"job_id": job_id})
 

@@ -805,20 +805,30 @@ def _all_emoji_infos(editing_script):
     return emojis
 
 
-def _importance_zoom_events(editing_script, caption_events):
-    events = _answer_start_zoom_events_from_captions(caption_events)
+def _survey_interview_subject_side(edit_settings):
+    if not isinstance(edit_settings, dict):
+        return None
+    if edit_settings.get("video_type") != "interview":
+        return None
+    side = str(edit_settings.get("interview_subject_side") or "").strip().lower()
+    return side if side in {"left", "right"} else None
+
+
+def _importance_zoom_events(editing_script, caption_events, edit_settings=None):
+    events = _answer_start_zoom_events_from_captions(caption_events, edit_settings)
     if not events:
-        events = _answer_start_zoom_events(editing_script, caption_events)
+        events = _answer_start_zoom_events(editing_script, caption_events, edit_settings)
     if events:
         logging.info("Prepared %s answer punch-in zoom events.", len(events))
     return events
 
 
-def _answer_start_zoom_events_from_captions(caption_events):
+def _answer_start_zoom_events_from_captions(caption_events, edit_settings=None):
     events = []
     last_start = -999.0
     pending_question_end = None
     ordered_events = sorted(caption_events or [], key=lambda item: float(item.get("start", 0.0)))
+    survey_side = _survey_interview_subject_side(edit_settings)
     usable_speaker_labels = len({
         speaker
         for event in ordered_events
@@ -858,7 +868,7 @@ def _answer_start_zoom_events_from_captions(caption_events):
             "end": answer_end,
             "scale": IMPORTANCE_ZOOM_SCALE,
             "speaker": answer_speaker,
-            "preferred_side": _preferred_answer_side_for_caption_event(event, len(events)),
+            "preferred_side": survey_side or _preferred_answer_side_for_caption_event(event, len(events)),
         })
         last_start = start
         pending_question_end = None
@@ -911,9 +921,10 @@ def _answer_end_for_active_speaker(caption_events, start_index, answer_speaker):
     return timeline_end
 
 
-def _answer_start_zoom_events(editing_script, caption_events):
+def _answer_start_zoom_events(editing_script, caption_events, edit_settings=None):
     events = []
     last_start = -999.0
+    survey_side = _survey_interview_subject_side(edit_settings)
     clips = sorted(editing_script.get("clips", []), key=lambda item: float(item.get("start", 0.0)))
 
     for index, clip_info in enumerate(clips):
@@ -951,6 +962,7 @@ def _answer_start_zoom_events(editing_script, caption_events):
             "end": min(answer_start + duration, answer_end),
             "scale": IMPORTANCE_ZOOM_SCALE,
             "speaker": _dominant_speaker_for_caption_events(caption_events, answer_start, answer_end),
+            "preferred_side": survey_side,
         })
         last_start = answer_start
 
@@ -1418,7 +1430,7 @@ def _apply_speaker_tracking(base_clip, original_video_path, transcript, face_sam
     return base_clip.fl(tracking_frame)
 
 
-def render_video(original_video_path, editing_script, assets, output_path, transcript=None):
+def render_video(original_video_path, editing_script, assets, output_path, transcript=None, edit_settings=None):
     logging.info("Starting clean overlay rendering process...")
     base_clip = VideoFileClip(original_video_path)
     overlay_clips = []
@@ -1427,7 +1439,7 @@ def render_video(original_video_path, editing_script, assets, output_path, trans
     if not caption_events:
         caption_events = _caption_events_from_script(editing_script)
     _apply_periodic_highlights(caption_events, editing_script)
-    zoom_events = _importance_zoom_events(editing_script, caption_events)
+    zoom_events = _importance_zoom_events(editing_script, caption_events, edit_settings)
     face_samples = _detect_face_track_samples(original_video_path, base_clip.duration) if zoom_events or ADVANCED_SPEAKER_TRACKING else []
     zoom_events = _prepare_answer_focus_zoom_events(zoom_events, face_samples, transcript, base_clip.w)
     tracked_base_clip = _apply_speaker_tracking(base_clip, original_video_path, transcript, face_samples)

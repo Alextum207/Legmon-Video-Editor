@@ -162,6 +162,9 @@ Use speaker/face tracking only when it improves framing.
 
 For interviews:
 
+- Ask/use the UI survey first: video type must be `interview` or `information`.
+- If the survey says `interview`, use the selected respondent side (`left` or `right`) as the hard zoom target for answer/highlight punch-ins.
+- Use `auto` only when the respondent side is genuinely unknown.
 - SFX should mainly support answers, not questions.
 - Do not place sounds on the interviewer asking a question.
 - The ding/bing sound is only the opening hook unless explicitly requested again.
