@@ -78,7 +78,7 @@ def process_video(input_video_path=None, output_name=DEFAULT_OUTPUT_NAME, transc
     transcript_path = transcript_path or transcriber.find_sidecar_transcript(input_video_path)
     if transcript_path:
         transcript_extension = os.path.splitext(transcript_path)[1].lower()
-        if transcript_extension in {".srt", ".vtt"}:
+        if transcript_extension in {".txt", ".srt", ".vtt"}:
             word_transcript = transcriber.transcribe_from_reference_file(transcript_path, input_video_path)
         else:
             word_transcript = transcriber.transcribe_from_text_file(transcript_path, input_video_path)

@@ -135,8 +135,10 @@ Current rule: zooms are answerer punch-ins, not random center zooms.
 - identify which side/person belongs to the answerer, then zoom to that person only
 - hold the punch-in only while that answerer is actually speaking
 - end the punch-in as soon as the interviewer starts speaking again, even if the interviewer talks about the answerer
+- when speaker labels are available, use the active speaker label to end the punch-in, not mentions of a person in the text
 - in two-person interviews, do not crop the middle between both people
-- jump from 100% to about 134% and hold for the full answer
+- frame the answerer like a Shorts close-up: tight side crop, speaker large, captions still centered as an overlay
+- jump from 100% to about 155% and hold for the full answer
 - keep captions rendered on top of the final zoomed/cropped picture
 - never add random zooms
 - never use slow automatic zoom-ins across long sentences
@@ -201,8 +203,8 @@ When the speaker is explaining something complex or fachlich:
 
 ## Pipeline Preference
 
-1. If a matching subtitle/transcript file is provided, use it when the user says it is the perfected/correct one.
-2. For TurboScribe SRT/VTT exports, use the file as text reference only, then create fresh internal word synchronization from the video audio.
+1. If a matching subtitle/transcript file is provided, use its words as the perfected/correct text reference.
+2. For TXT/SRT/VTT subtitle files, use the file as text reference only, then create fresh internal word synchronization from the video audio via Speechmatics when configured.
 3. Otherwise use Speechmatics for transcription.
 4. If Speechmatics fails, fall back to faster-whisper.
 5. Generate the editing script.

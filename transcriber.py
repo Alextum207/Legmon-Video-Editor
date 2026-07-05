@@ -245,7 +245,7 @@ def _parse_speechmatics_transcript(payload):
             "start": start,
             "end": end,
             "block_index": block_index,
-            "speaker": result.get("speaker"),
+            "speaker": result.get("speaker") or alternatives[0].get("speaker"),
         })
 
     return word_level_transcript

@@ -48,7 +48,10 @@ MIN_SECONDS_BETWEEN_EMOJIS = 4.0
 MAX_SAME_EMOJI_PER_VIDEO = 2
 MIN_SECONDS_BETWEEN_HIGHLIGHTS = 2.0
 HIGHLIGHT_EVERY_NTH_CAPTION = 2
-IMPORTANCE_ZOOM_SCALE = 1.34
+IMPORTANCE_ZOOM_SCALE = 1.55
+ANSWER_ZOOM_Y_CENTER_RATIO = 0.52
+ANSWER_ZOOM_LEFT_CENTER_RATIO = 0.34
+ANSWER_ZOOM_RIGHT_CENTER_RATIO = 0.66
 IMPORTANCE_ZOOM_MIN_DURATION = 0.85
 IMPORTANCE_ZOOM_MAX_DURATION = 1.20
 MIN_SECONDS_BETWEEN_IMPORTANCE_ZOOMS = 3.0
@@ -816,6 +819,12 @@ def _answer_start_zoom_events_from_captions(caption_events):
     last_start = -999.0
     pending_question_end = None
     ordered_events = sorted(caption_events or [], key=lambda item: float(item.get("start", 0.0)))
+    usable_speaker_labels = len({
+        speaker
+        for event in ordered_events
+        for speaker in (event.get("speakers") or [])
+        if speaker
+    }) >= 2
 
     for index, event in enumerate(ordered_events):
         start = float(event.get("start", 0.0))
@@ -833,7 +842,13 @@ def _answer_start_zoom_events_from_captions(caption_events):
             pending_question_end = None
             continue
 
-        answer_end = _next_question_start_or_timeline_end(ordered_events, index)
+        preliminary_end = _next_question_start_or_timeline_end(ordered_events, index)
+        answer_speaker = (
+            _dominant_speaker_for_caption_events(ordered_events[index:], start, preliminary_end)
+            if usable_speaker_labels
+            else None
+        )
+        answer_end = _answer_end_for_active_speaker(ordered_events, index, answer_speaker)
         if answer_end <= start:
             pending_question_end = None
             continue
@@ -842,7 +857,7 @@ def _answer_start_zoom_events_from_captions(caption_events):
             "start": start,
             "end": answer_end,
             "scale": IMPORTANCE_ZOOM_SCALE,
-            "speaker": _dominant_speaker_for_caption_events(ordered_events[index:], start, answer_end),
+            "speaker": answer_speaker,
         })
         last_start = start
         pending_question_end = None
@@ -858,6 +873,33 @@ def _next_question_start_or_timeline_end(caption_events, start_index):
         if event.get("is_question"):
             return event_start
         timeline_end = max(timeline_end, event_end)
+    return timeline_end
+
+
+def _dominant_speaker_for_event(event):
+    speakers = event.get("speakers") or []
+    if not speakers:
+        return None
+    return max(set(speakers), key=speakers.count)
+
+
+def _answer_end_for_active_speaker(caption_events, start_index, answer_speaker):
+    start_event = caption_events[start_index]
+    answer_start = float(start_event.get("start", 0.0))
+    timeline_end = float(start_event.get("end", answer_start))
+
+    for event in caption_events[start_index + 1:]:
+        event_start = float(event.get("start", 0.0))
+        event_end = float(event.get("end", event_start))
+        if event.get("is_question"):
+            return event_start
+
+        event_speaker = _dominant_speaker_for_event(event)
+        if answer_speaker and event_speaker and event_speaker != answer_speaker and event_start - answer_start >= 0.65:
+            return event_start
+
+        timeline_end = max(timeline_end, event_end)
+
     return timeline_end
 
 
@@ -972,8 +1014,10 @@ def _apply_importance_zooms(base_clip, zoom_events):
         crop_height = max(1, int(height / scale))
         center_ratio = float(zoom_event.get("center_x_ratio", 0.5))
         center_x = width * max(0.0, min(1.0, center_ratio))
+        center_y_ratio = float(zoom_event.get("center_y_ratio", ANSWER_ZOOM_Y_CENTER_RATIO))
+        center_y = height * max(0.0, min(1.0, center_y_ratio))
         x1 = int(max(0, min(width - crop_width, center_x - crop_width / 2)))
-        y1 = max(0, (height - crop_height) // 2)
+        y1 = int(max(0, min(height - crop_height, center_y - crop_height / 2)))
         cropped = frame[y1:y1 + crop_height, x1:x1 + crop_width]
 
         image = Image.fromarray(cropped)
@@ -1261,7 +1305,8 @@ def _prepare_answer_focus_zoom_events(zoom_events, face_samples, transcript, fra
     if not zoom_events:
         return []
 
-    speaker_profiles = _speaker_center_profiles(face_samples, transcript)
+    distinct_speakers = {word.get("speaker") for word in transcript or [] if word.get("speaker")}
+    speaker_profiles = _speaker_center_profiles(face_samples, transcript) if len(distinct_speakers) >= 2 else {}
     prepared = []
     fallback_answerer_center_ratio = None
     for event in zoom_events:
@@ -1280,10 +1325,18 @@ def _prepare_answer_focus_zoom_events(zoom_events, face_samples, transcript, fra
         else:
             center_ratio = 0.5
 
-        if not prepared_event.get("speaker") and fallback_answerer_center_ratio is None and abs(center_ratio - 0.5) > 0.05:
+        if target or abs(center_ratio - 0.5) > 0.03:
+            center_ratio = (
+                ANSWER_ZOOM_RIGHT_CENTER_RATIO
+                if center_ratio >= 0.5
+                else ANSWER_ZOOM_LEFT_CENTER_RATIO
+            )
+
+        if not prepared_event.get("speaker") and fallback_answerer_center_ratio is None and target:
             fallback_answerer_center_ratio = center_ratio
 
         prepared_event["center_x_ratio"] = float(max(0.0, min(1.0, center_ratio)))
+        prepared_event["center_y_ratio"] = ANSWER_ZOOM_Y_CENTER_RATIO
         prepared.append(prepared_event)
 
     side_summary = [
