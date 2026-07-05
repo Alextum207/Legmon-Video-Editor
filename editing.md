@@ -136,6 +136,7 @@ Current rule: zooms are answerer punch-ins, not random center zooms.
 - hold the punch-in only while that answerer is actually speaking
 - end the punch-in as soon as the interviewer starts speaking again, even if the interviewer talks about the answerer
 - when speaker labels are available, use the active speaker label to end the punch-in, not mentions of a person in the text
+- for an intro answer like "Ich bin ...", focus the person actually introducing themselves, even if later answer punch-ins use the other side
 - in two-person interviews, do not crop the middle between both people
 - frame the answerer like a Shorts close-up: tight side crop, speaker large, captions still centered as an overlay
 - jump from 100% to about 155% and hold for the full answer

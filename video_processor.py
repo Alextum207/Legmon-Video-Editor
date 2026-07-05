@@ -858,6 +858,7 @@ def _answer_start_zoom_events_from_captions(caption_events):
             "end": answer_end,
             "scale": IMPORTANCE_ZOOM_SCALE,
             "speaker": answer_speaker,
+            "preferred_side": _preferred_answer_side_for_caption_event(event, len(events)),
         })
         last_start = start
         pending_question_end = None
@@ -881,6 +882,13 @@ def _dominant_speaker_for_event(event):
     if not speakers:
         return None
     return max(set(speakers), key=speakers.count)
+
+
+def _preferred_answer_side_for_caption_event(event, answer_index):
+    tokens = event.get("tokens") or set()
+    if answer_index == 0 and {"ich", "bin"} <= tokens:
+        return "left"
+    return None
 
 
 def _answer_end_for_active_speaker(caption_events, start_index, answer_speaker):
@@ -1325,7 +1333,12 @@ def _prepare_answer_focus_zoom_events(zoom_events, face_samples, transcript, fra
         else:
             center_ratio = 0.5
 
-        if target or abs(center_ratio - 0.5) > 0.03:
+        preferred_side = prepared_event.get("preferred_side")
+        if preferred_side == "left":
+            center_ratio = ANSWER_ZOOM_LEFT_CENTER_RATIO
+        elif preferred_side == "right":
+            center_ratio = ANSWER_ZOOM_RIGHT_CENTER_RATIO
+        elif target or abs(center_ratio - 0.5) > 0.03:
             center_ratio = (
                 ANSWER_ZOOM_RIGHT_CENTER_RATIO
                 if center_ratio >= 0.5
