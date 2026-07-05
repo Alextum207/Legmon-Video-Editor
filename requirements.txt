@@ -3,6 +3,10 @@ faster-whisper
 litellm
 python-dotenv
 requests
+truststore
+opencv-python==4.10.0.84
 pexels-api
 pixabay-python
 Pillow
+Flask
+playwright

@@ -58,70 +58,74 @@ def resolve_output_path(output_name):
     return os.path.join(FINISHED_VIDEO_DIR, output_name)
 
 
-def main():
+def process_video(input_video_path=None, output_name=DEFAULT_OUTPUT_NAME, transcript_path=None, progress_callback=None):
     ensure_project_directories()
     assets = {'b_roll': {}, 'sfx': {}, 'music': None}
-    parser = argparse.ArgumentParser(description="AI Video Editor - Corrective Build")
-    parser.add_argument("--input_video", help="Input video path. Relative names are resolved inside roh_videos/. If omitted, the only video in roh_videos/ is used.")
-    parser.add_argument("--output_name", default=DEFAULT_OUTPUT_NAME, help="Output filename. Relative names are saved inside finished_videos/.")
-    args = parser.parse_args()
+    progress_callback = progress_callback or (lambda percent, message: None)
+
     try:
-        input_video_path = resolve_input_video(args.input_video)
-        output_file_path = resolve_output_path(args.output_name)
+        input_video_path = resolve_input_video(input_video_path)
+        output_file_path = resolve_output_path(output_name)
     except (FileNotFoundError, ValueError) as e:
         logging.error(e)
-        return
+        raise
 
     if not os.path.exists(input_video_path):
-        logging.error(f"Input video not found: {input_video_path}")
-        return
+        raise FileNotFoundError(f"Input video not found: {input_video_path}")
 
-    # --- 1. Transcription ---
+    progress_callback(10, "Reading subtitles or transcribing audio")
     logging.info("--- Step 1: Transcription ---")
-    transcript_path = transcriber.find_sidecar_transcript(input_video_path)
+    transcript_path = transcript_path or transcriber.find_sidecar_transcript(input_video_path)
     if transcript_path:
-        word_transcript = transcriber.transcribe_from_text_file(transcript_path, input_video_path)
+        transcript_extension = os.path.splitext(transcript_path)[1].lower()
+        if transcript_extension in {".srt", ".vtt"}:
+            word_transcript = transcriber.transcribe_from_reference_file(transcript_path, input_video_path)
+        else:
+            word_transcript = transcriber.transcribe_from_text_file(transcript_path, input_video_path)
     else:
         temp_audio_path = transcriber.extract_audio(input_video_path)
-        if not temp_audio_path: return
+        if not temp_audio_path:
+            raise RuntimeError("Could not extract audio from input video.")
         word_transcript = transcriber.transcribe_audio(temp_audio_path)
-    if not word_transcript: return
+    if not word_transcript:
+        raise RuntimeError("Could not create a word-level transcript.")
 
-    # --- 2. LLM Editing Script Generation ---
+    progress_callback(35, "Creating Legmon edit script")
     logging.info("--- Step 2: Generating Corrected Editing Script ---")
     editing_script = llm_handler.generate_editing_script(word_transcript)
-    if not editing_script: return
+    if not editing_script:
+        logging.warning("LLM editing script failed. Using local interview-safe fallback script.")
+        editing_script = llm_handler.generate_fallback_editing_script(word_transcript)
 
     if isinstance(editing_script, str):
-        try:
-            editing_script = json.loads(editing_script)
-        except json.JSONDecodeError:
-            logging.error("LLM returned a string that is not valid JSON.")
-            return
+        editing_script = json.loads(editing_script)
 
     # --- 3. Asset Fetching --- #
+    progress_callback(55, "Collecting optional assets")
     logging.info("--- Step 3: Fetching All Required Assets ---")
-    # Get B-Roll
     b_roll_keywords = set(c.get('b_roll_keyword') for c in editing_script.get('clips', []) if c.get('b_roll_keyword'))
     for keyword in b_roll_keywords:
         b_roll_path = asset_manager.get_b_roll(keyword)
-        if b_roll_path: assets['b_roll'][keyword] = b_roll_path
+        if b_roll_path:
+            assets['b_roll'][keyword] = b_roll_path
 
-    # Get SFX
-    sfx_to_fetch = set()
+    sfx_to_fetch = {"opening_hit", "keyword_ping", "topic_wosh", "topic_riser"}
     for c in editing_script.get('clips', []):
-        if c.get('transition_sfx'): sfx_to_fetch.add(c['transition_sfx'])
-        if c.get('caption_sfx'): sfx_to_fetch.add(c['caption_sfx'])
+        if c.get('transition_sfx'):
+            sfx_to_fetch.add(c['transition_sfx'])
+        if c.get('caption_sfx'):
+            sfx_to_fetch.add(c['caption_sfx'])
     for sfx_name in sfx_to_fetch:
         sfx_path = asset_manager.get_sfx(sfx_name)
-        if sfx_path: assets['sfx'][sfx_name] = sfx_path
+        if sfx_path:
+            assets['sfx'][sfx_name] = sfx_path
 
-    # Get Music
     music_mood = editing_script.get('music', {}).get('mood')
     if music_mood:
         assets['music'] = asset_manager.get_music(music_mood)
 
     # --- 4. Video Rendering --- #
+    progress_callback(75, "Rendering final video")
     logging.info("--- Step 4: Rendering Corrected Video ---")
     video_processor.render_video(
         original_video_path=input_video_path,
@@ -131,7 +135,21 @@ def main():
         transcript=word_transcript,
     )
 
+    progress_callback(100, "Done")
     logging.info(f"Process complete! Corrected video is at: {output_file_path}")
+    return output_file_path
+
+
+def main():
+    parser = argparse.ArgumentParser(description="AI Video Editor - Corrective Build")
+    parser.add_argument("--input_video", help="Input video path. Relative names are resolved inside roh_videos/. If omitted, the only video in roh_videos/ is used.")
+    parser.add_argument("--output_name", default=DEFAULT_OUTPUT_NAME, help="Output filename. Relative names are saved inside finished_videos/.")
+    parser.add_argument("--transcript", help="Optional subtitle/transcript path. Supports timestamped txt/srt-like text.")
+    args = parser.parse_args()
+    try:
+        process_video(args.input_video, args.output_name, args.transcript)
+    except Exception as e:
+        logging.error(e)
 
 if __name__ == "__main__":
     main()

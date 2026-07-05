@@ -1,14 +1,40 @@
 
 import logging
 import os
+import json
 import platform
 import re
+import tempfile
+import time
+from difflib import SequenceMatcher
 
+from dotenv import load_dotenv
 from faster_whisper import BatchedInferencePipeline, WhisperModel
 from moviepy.editor import VideoFileClip
+import requests
+
+try:
+    import truststore
+
+    truststore.inject_into_ssl()
+except ImportError:
+    pass
+
+load_dotenv()
 
 logging.basicConfig(level=logging.INFO)
 
+SPEECHMATICS_API_KEY = os.getenv("SPEECHMATICS_API_KEY")
+SPEECHMATICS_API_BASE = os.getenv("SPEECHMATICS_API_BASE", "https://eu1.asr.api.speechmatics.com/v2").rstrip("/")
+SPEECHMATICS_LANGUAGE = os.getenv("SPEECHMATICS_LANGUAGE", "auto")
+SPEECHMATICS_MODEL = os.getenv("SPEECHMATICS_MODEL", "enhanced")
+SPEECHMATICS_EXPECTED_LANGUAGES = [
+    language.strip()
+    for language in os.getenv("SPEECHMATICS_EXPECTED_LANGUAGES", "de,en").split(",")
+    if language.strip()
+]
+SPEECHMATICS_POLL_SECONDS = float(os.getenv("SPEECHMATICS_POLL_SECONDS", "5"))
+SPEECHMATICS_TIMEOUT_SECONDS = int(os.getenv("SPEECHMATICS_TIMEOUT_SECONDS", "900"))
 WHISPER_MODEL_SIZE = os.getenv("WHISPER_MODEL_SIZE", "tiny")
 WHISPER_BATCH_SIZE = int(os.getenv("WHISPER_BATCH_SIZE", "24"))
 WHISPER_COMPUTE_TYPES = ("int8_float16", "float16", "int8")
@@ -111,6 +137,142 @@ def _transcribe_with_fastest_backend(audio_path):
             logging.warning("Transcription failed with compute_type=%s; trying fallback. Error: %s", compute_type, exc)
 
     raise RuntimeError(f"Could not transcribe with any faster-whisper compute type: {last_error}")
+
+
+def _speechmatics_headers():
+    return {"Authorization": f"Bearer {SPEECHMATICS_API_KEY}"}
+
+
+def _speechmatics_job_config():
+    transcription_config = {
+        "language": SPEECHMATICS_LANGUAGE,
+        "model": SPEECHMATICS_MODEL,
+        "diarization": "speaker",
+        "punctuation_overrides": {"permitted_marks": ["?", ".", "!", ","]},
+    }
+    config = {
+        "type": "transcription",
+        "transcription_config": transcription_config,
+    }
+
+    if SPEECHMATICS_LANGUAGE == "auto":
+        config["language_identification_config"] = {"low_confidence_action": "allow"}
+        if SPEECHMATICS_EXPECTED_LANGUAGES:
+            config["language_identification_config"]["expected_languages"] = SPEECHMATICS_EXPECTED_LANGUAGES
+
+    return config
+
+
+def _speechmatics_submit_job(audio_path):
+    logging.info("Submitting audio to Speechmatics Batch API...")
+    with open(audio_path, "rb") as audio_file:
+        response = requests.post(
+            f"{SPEECHMATICS_API_BASE}/jobs",
+            headers=_speechmatics_headers(),
+            files={"data_file": (os.path.basename(audio_path), audio_file)},
+            data={"config": json.dumps(_speechmatics_job_config())},
+            timeout=120,
+        )
+    response.raise_for_status()
+    payload = response.json()
+    job_id = payload.get("id") or payload.get("job", {}).get("id")
+    if not job_id:
+        raise RuntimeError(f"Speechmatics did not return a job id: {payload}")
+    logging.info("Speechmatics job submitted: %s", job_id)
+    return job_id
+
+
+def _speechmatics_wait_for_job(job_id):
+    started_at = time.time()
+    while True:
+        response = requests.get(
+            f"{SPEECHMATICS_API_BASE}/jobs/{job_id}",
+            headers=_speechmatics_headers(),
+            timeout=60,
+        )
+        response.raise_for_status()
+        payload = response.json()
+        job = payload.get("job", payload)
+        status = job.get("status")
+        logging.info("Speechmatics job %s status: %s", job_id, status)
+
+        if status == "done":
+            return
+        if status == "rejected":
+            errors = job.get("errors") or payload.get("errors") or []
+            raise RuntimeError(f"Speechmatics rejected job {job_id}: {errors or payload}")
+        if time.time() - started_at > SPEECHMATICS_TIMEOUT_SECONDS:
+            raise TimeoutError(f"Speechmatics job {job_id} did not finish within {SPEECHMATICS_TIMEOUT_SECONDS}s.")
+
+        time.sleep(SPEECHMATICS_POLL_SECONDS)
+
+
+def _parse_speechmatics_transcript(payload):
+    word_level_transcript = []
+    block_index = -1
+    previous_end = None
+
+    for result in payload.get("results", []):
+        alternatives = result.get("alternatives") or []
+        if not alternatives:
+            continue
+
+        content = alternatives[0].get("content", "").strip()
+        if not content:
+            continue
+
+        if result.get("type") == "punctuation":
+            if word_level_transcript and content in {".", "!", "?", ",", ";", ":"}:
+                word_level_transcript[-1]["word"] = f'{word_level_transcript[-1]["word"]}{content}'
+            continue
+
+        if result.get("type") != "word":
+            continue
+
+        start = result.get("start_time")
+        end = result.get("end_time")
+        if start is None or end is None:
+            continue
+
+        start = float(start)
+        end = float(end)
+        if previous_end is None or start - previous_end > 0.8:
+            block_index += 1
+        previous_end = end
+
+        word_level_transcript.append({
+            "word": content,
+            "start": start,
+            "end": end,
+            "block_index": block_index,
+            "speaker": result.get("speaker"),
+        })
+
+    return word_level_transcript
+
+
+def _speechmatics_fetch_transcript(job_id):
+    response = requests.get(
+        f"{SPEECHMATICS_API_BASE}/jobs/{job_id}/transcript",
+        headers=_speechmatics_headers(),
+        params={"format": "json-v2"},
+        timeout=120,
+    )
+    response.raise_for_status()
+    payload = response.json()
+    word_level_transcript = _parse_speechmatics_transcript(payload)
+    if not word_level_transcript:
+        raise RuntimeError("Speechmatics returned no word-level timestamps.")
+    return word_level_transcript
+
+
+def _transcribe_with_speechmatics(audio_path):
+    if not SPEECHMATICS_API_KEY:
+        return None
+
+    job_id = _speechmatics_submit_job(audio_path)
+    _speechmatics_wait_for_job(job_id)
+    return _speechmatics_fetch_transcript(job_id)
 
 
 def extract_audio(video_path, audio_path="temp_audio.mp3"):
@@ -244,7 +406,15 @@ def _split_words_into_chunks(words):
 
 
 def _normalize_local_word(word):
-    return re.sub(r"[^a-z0-9]+", "", str(word).lower())
+    normalized = str(word).lower()
+    normalized = (
+        normalized
+        .replace("ä", "ae")
+        .replace("ö", "oe")
+        .replace("ü", "ue")
+        .replace("ß", "ss")
+    )
+    return re.sub(r"[^a-z0-9]+", "", normalized)
 
 
 def _is_local_long_word(word):
@@ -376,13 +546,178 @@ def transcribe_from_text_file(transcript_path, video_path=None):
     return word_transcript
 
 
+def transcribe_from_reference_file(transcript_path, video_path):
+    """Uses an SRT/VTT as text reference, then aligns it to local audio word timings."""
+    logging.info("Using subtitle file as reference text with internal audio synchronization: %s", transcript_path)
+    blocks = _reference_blocks_from_file(transcript_path, video_path)
+    if not blocks:
+        logging.warning("Reference subtitle parsing failed; falling back to direct subtitle timings.")
+        return transcribe_from_text_file(transcript_path, video_path)
+
+    reference_words = _reference_words_from_blocks(blocks)
+    if not reference_words:
+        logging.warning("Reference subtitle contains no words; falling back to direct subtitle timings.")
+        return transcribe_from_text_file(transcript_path, video_path)
+
+    temp_audio_path = os.path.join(tempfile.gettempdir(), f"legmon_reference_sync_{int(time.time() * 1000)}.mp3")
+    audio_path = extract_audio(video_path, temp_audio_path)
+    if not audio_path:
+        logging.warning("Could not extract audio for reference sync; falling back to direct subtitle timings.")
+        return transcribe_from_text_file(transcript_path, video_path)
+
+    audio_transcript = transcribe_audio(audio_path)
+    if not audio_transcript:
+        logging.warning("Internal audio transcription failed; falling back to direct subtitle timings.")
+        return transcribe_from_text_file(transcript_path, video_path)
+
+    aligned = _align_reference_words_to_audio(reference_words, audio_transcript)
+    logging.info(
+        "Aligned %s reference words to %s internally transcribed words.",
+        len(aligned),
+        len(audio_transcript),
+    )
+    return aligned
+
+
+def _reference_blocks_from_file(transcript_path, video_path=None):
+    with open(transcript_path, "r", encoding="utf-8-sig") as transcript_file:
+        text = transcript_file.read()
+
+    video_duration = None
+    if video_path and os.path.exists(video_path):
+        video_clip = VideoFileClip(video_path)
+        video_duration = video_clip.duration
+        video_clip.close()
+
+    blocks = _parse_timestamped_blocks(text)
+    if not blocks:
+        blocks = _parse_inline_timestamp_blocks(text, video_duration)
+    return blocks
+
+
+def _reference_words_from_blocks(blocks):
+    reference_words = []
+    for block_index, block in enumerate(blocks):
+        for word in str(block.get("text", "")).split():
+            clean_word = word.strip()
+            if not clean_word:
+                continue
+            reference_words.append({
+                "word": clean_word,
+                "block_index": block_index,
+                "reference_start": float(block.get("start", 0.0)),
+                "reference_end": float(block.get("end", block.get("start", 0.0))),
+            })
+    return reference_words
+
+
+def _align_reference_words_to_audio(reference_words, audio_transcript):
+    reference_tokens = [_normalize_local_word(item["word"]) for item in reference_words]
+    audio_tokens = [_normalize_local_word(item.get("word", "")) for item in audio_transcript]
+    matcher = SequenceMatcher(None, reference_tokens, audio_tokens, autojunk=False)
+    matched_audio_indices = {}
+
+    for tag, ref_start, ref_end, audio_start, audio_end in matcher.get_opcodes():
+        if tag != "equal":
+            continue
+        for offset in range(ref_end - ref_start):
+            matched_audio_indices[ref_start + offset] = audio_start + offset
+
+    aligned = []
+    for index, reference_word in enumerate(reference_words):
+        audio_index = matched_audio_indices.get(index)
+        if audio_index is not None and audio_index < len(audio_transcript):
+            audio_word = audio_transcript[audio_index]
+            start = float(audio_word.get("start", reference_word["reference_start"]))
+            end = float(audio_word.get("end", start + 0.25))
+            speaker = audio_word.get("speaker")
+        else:
+            start, end = _interpolated_reference_word_time(index, reference_words, audio_transcript, matched_audio_indices)
+            speaker = _interpolated_reference_speaker(index, audio_transcript, matched_audio_indices)
+
+        if aligned:
+            start = max(start, aligned[-1]["end"])
+        if end <= start:
+            end = start + 0.18
+
+        aligned_word = {
+            "word": reference_word["word"],
+            "start": start,
+            "end": end,
+            "block_index": reference_word["block_index"],
+        }
+        if speaker:
+            aligned_word["speaker"] = speaker
+        aligned.append(aligned_word)
+
+    return aligned
+
+
+def _interpolated_reference_speaker(index, audio_transcript, matched_audio_indices):
+    previous_ref = next((candidate for candidate in range(index - 1, -1, -1) if candidate in matched_audio_indices), None)
+    next_ref = next((candidate for candidate in range(index + 1, index + 8) if candidate in matched_audio_indices), None)
+
+    if previous_ref is not None:
+        speaker = audio_transcript[matched_audio_indices[previous_ref]].get("speaker")
+        if speaker:
+            return speaker
+    if next_ref is not None:
+        speaker = audio_transcript[matched_audio_indices[next_ref]].get("speaker")
+        if speaker:
+            return speaker
+    return None
+
+
+def _interpolated_reference_word_time(index, reference_words, audio_transcript, matched_audio_indices):
+    previous_ref = next((candidate for candidate in range(index - 1, -1, -1) if candidate in matched_audio_indices), None)
+    next_ref = next((candidate for candidate in range(index + 1, len(reference_words)) if candidate in matched_audio_indices), None)
+
+    if previous_ref is not None and next_ref is not None:
+        previous_audio = audio_transcript[matched_audio_indices[previous_ref]]
+        next_audio = audio_transcript[matched_audio_indices[next_ref]]
+        start_bound = float(previous_audio.get("end", previous_audio.get("start", 0.0)))
+        end_bound = float(next_audio.get("start", start_bound + 0.25))
+        slots = max(1, next_ref - previous_ref)
+        step = max(0.18, (end_bound - start_bound) / slots)
+        start = start_bound + step * (index - previous_ref - 1)
+        return start, min(end_bound, start + step * 0.9)
+
+    if previous_ref is not None:
+        previous_audio = audio_transcript[matched_audio_indices[previous_ref]]
+        start = float(previous_audio.get("end", previous_audio.get("start", 0.0))) + 0.24 * (index - previous_ref - 1)
+        return start, start + 0.22
+
+    if next_ref is not None:
+        next_audio = audio_transcript[matched_audio_indices[next_ref]]
+        end = max(0.18, float(next_audio.get("start", 0.25)) - 0.24 * (next_ref - index - 1))
+        return max(0.0, end - 0.22), end
+
+    reference_word = reference_words[index]
+    block_words = [
+        word for word in reference_words
+        if word["block_index"] == reference_word["block_index"]
+    ]
+    position = block_words.index(reference_word)
+    duration = max(0.25, reference_word["reference_end"] - reference_word["reference_start"])
+    step = duration / max(1, len(block_words))
+    start = reference_word["reference_start"] + position * step
+    return start, start + step * 0.9
+
+
 def transcribe_audio(audio_path):
     """Transcribes audio and returns word-level timestamps."""
     if not os.path.exists(audio_path):
         logging.error(f"Audio file not found at: {audio_path}")
         return None
     try:
-        word_level_transcript = _transcribe_with_fastest_backend(audio_path)
+        try:
+            word_level_transcript = _transcribe_with_speechmatics(audio_path)
+        except Exception as speechmatics_error:
+            logging.warning("Speechmatics transcription failed; falling back to faster-whisper. Error: %s", speechmatics_error)
+            word_level_transcript = None
+
+        if not word_level_transcript:
+            word_level_transcript = _transcribe_with_fastest_backend(audio_path)
         
         logging.info("Transcription complete.")
         # Clean up the temporary audio file

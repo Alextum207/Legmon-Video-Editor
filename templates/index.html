@@ -1,0 +1,458 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Legmon Video Editor</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #101214;
+      --panel: #191d20;
+      --panel-2: #22282c;
+      --text: #f5f7f8;
+      --muted: #a9b3b8;
+      --accent: #f4c70f;
+      --accent-2: #88ffc4;
+      --danger: #ff6961;
+      --border: #343c42;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Arial, Helvetica, sans-serif;
+    }
+
+    main {
+      width: min(1040px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 32px 0;
+    }
+
+    header {
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: 24px;
+      margin-bottom: 24px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(28px, 4vw, 46px);
+      line-height: 1;
+    }
+
+    .status-pill {
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 8px 12px;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+
+    .upload-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+    }
+
+    .workflow {
+      display: grid;
+      grid-template-columns: 1.1fr 1fr;
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+
+    .workflow-panel {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--panel);
+      padding: 18px;
+      display: grid;
+      gap: 12px;
+    }
+
+    .workflow-title {
+      margin: 0;
+      font-size: 18px;
+      line-height: 1.2;
+    }
+
+    .workflow-copy,
+    .saved-path {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.4;
+    }
+
+    .workflow-actions {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .secondary-link {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      padding: 11px 14px;
+      text-decoration: none;
+      font-weight: 800;
+    }
+
+    .secondary-button {
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--text);
+      padding: 11px 14px;
+    }
+
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--muted);
+      line-height: 1.35;
+    }
+
+    .toggle-row input {
+      width: 18px;
+      height: 18px;
+      accent-color: var(--accent);
+    }
+
+    .drop-zone {
+      min-height: 260px;
+      border: 2px dashed var(--border);
+      border-radius: 8px;
+      background: var(--panel);
+      display: grid;
+      place-items: center;
+      padding: 24px;
+      cursor: pointer;
+      transition: border-color 160ms ease, background 160ms ease, transform 160ms ease;
+    }
+
+    .drop-zone:hover,
+    .drop-zone.dragover {
+      border-color: var(--accent);
+      background: var(--panel-2);
+      transform: translateY(-1px);
+    }
+
+    .drop-zone input { display: none; }
+
+    .drop-content {
+      text-align: center;
+      display: grid;
+      gap: 12px;
+    }
+
+    .drop-icon {
+      width: 54px;
+      height: 54px;
+      margin: 0 auto;
+      border-radius: 8px;
+      display: grid;
+      place-items: center;
+      background: #2b3237;
+      color: var(--accent);
+      font-size: 28px;
+      font-weight: 800;
+    }
+
+    .drop-title {
+      font-size: 20px;
+      font-weight: 800;
+    }
+
+    .drop-file,
+    .drop-hint {
+      color: var(--muted);
+      overflow-wrap: anywhere;
+    }
+
+    .actions {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin-top: 18px;
+      padding: 18px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--panel);
+    }
+
+    button,
+    .download {
+      appearance: none;
+      border: 0;
+      border-radius: 8px;
+      background: var(--accent);
+      color: #151515;
+      font-weight: 800;
+      padding: 12px 18px;
+      cursor: pointer;
+      text-decoration: none;
+    }
+
+    button:disabled {
+      cursor: not-allowed;
+      opacity: 0.45;
+    }
+
+    .progress-shell {
+      flex: 1;
+      min-width: 160px;
+    }
+
+    .progress-meta {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 8px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .progress-track {
+      height: 12px;
+      overflow: hidden;
+      border-radius: 999px;
+      background: #30373c;
+    }
+
+    .progress-fill {
+      width: 0%;
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, var(--accent), var(--accent-2));
+      transition: width 220ms ease;
+    }
+
+    .error {
+      margin-top: 12px;
+      color: var(--danger);
+      min-height: 22px;
+    }
+
+    .saved-path {
+      margin-top: 12px;
+      overflow-wrap: anywhere;
+      min-height: 22px;
+    }
+
+    @media (max-width: 760px) {
+      header,
+      .actions {
+        align-items: stretch;
+        flex-direction: column;
+      }
+
+      .upload-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .workflow {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>Legmon Video Editor</h1>
+      <div class="status-pill">Local render</div>
+    </header>
+
+    <form id="uploadForm">
+      <section class="workflow">
+        <div class="workflow-panel">
+          <h2 class="workflow-title">TurboScribe reference</h2>
+          <p class="workflow-copy">Upload the rough cut there, export SRT with compact segments, then drop that SRT here.</p>
+          <div class="workflow-actions">
+            <a class="secondary-link" href="https://turboscribe.ai/de/dashboard" target="_blank" rel="noreferrer">Open TurboScribe</a>
+            <button id="loginButton" class="secondary-button" type="button">Open login browser</button>
+            <button id="statusButton" class="secondary-button" type="button">Check login</button>
+          </div>
+        </div>
+        <div class="workflow-panel">
+          <h2 class="workflow-title">Sync mode</h2>
+          <p class="workflow-copy">SRT/VTT text is used as reference; Legmon creates fresh internal word timing before rendering.</p>
+          <label class="toggle-row">
+            <input id="useTurboscribe" name="use_turboscribe" type="checkbox" checked>
+            <span>Fetch SRT from TurboScribe automatically when no subtitle file is dropped.</span>
+          </label>
+        </div>
+      </section>
+
+      <section class="upload-grid">
+        <label class="drop-zone" data-drop-zone>
+          <input id="videoInput" name="video" type="file" accept=".mp4,.mov,.m4v,.avi,.mkv,.webm" required>
+          <span class="drop-content">
+            <span class="drop-icon">V</span>
+            <span class="drop-title">Raw video</span>
+            <span id="videoFile" class="drop-file">Drop or choose file</span>
+            <span class="drop-hint">MP4, MOV, AVI, MKV, WebM</span>
+          </span>
+        </label>
+
+        <label class="drop-zone" data-drop-zone>
+          <input id="subtitleInput" name="subtitle" type="file" accept=".txt,.srt,.vtt">
+          <span class="drop-content">
+            <span class="drop-icon">S</span>
+            <span class="drop-title">TurboScribe SRT</span>
+            <span id="subtitleFile" class="drop-file">Drop or choose file</span>
+            <span class="drop-hint">SRT/VTT reference or TXT timing file</span>
+          </span>
+        </label>
+      </section>
+
+      <section class="actions">
+        <div class="progress-shell">
+          <div class="progress-meta">
+            <span id="message">Waiting for upload</span>
+            <span id="percent">0%</span>
+          </div>
+          <div class="progress-track">
+            <div id="progressFill" class="progress-fill"></div>
+          </div>
+        </div>
+        <button id="renderButton" type="submit">Render</button>
+        <a id="downloadButton" class="download" href="#" hidden>Download</a>
+      </section>
+    </form>
+    <div id="error" class="error"></div>
+    <div id="savedPath" class="saved-path"></div>
+  </main>
+
+  <script>
+    const form = document.querySelector("#uploadForm");
+    const videoInput = document.querySelector("#videoInput");
+    const subtitleInput = document.querySelector("#subtitleInput");
+    const videoFile = document.querySelector("#videoFile");
+    const subtitleFile = document.querySelector("#subtitleFile");
+    const renderButton = document.querySelector("#renderButton");
+    const loginButton = document.querySelector("#loginButton");
+    const statusButton = document.querySelector("#statusButton");
+    const downloadButton = document.querySelector("#downloadButton");
+    const progressFill = document.querySelector("#progressFill");
+    const message = document.querySelector("#message");
+    const percent = document.querySelector("#percent");
+    const errorBox = document.querySelector("#error");
+    const savedPath = document.querySelector("#savedPath");
+
+    function setProgress(value, label) {
+      const safeValue = Math.max(0, Math.min(100, Number(value) || 0));
+      progressFill.style.width = `${safeValue}%`;
+      percent.textContent = `${safeValue}%`;
+      message.textContent = label || "Working";
+    }
+
+    function updateFileLabel(input, label) {
+      label.textContent = input.files[0] ? input.files[0].name : "Drop or choose file";
+    }
+
+    for (const zone of document.querySelectorAll("[data-drop-zone]")) {
+      const input = zone.querySelector("input");
+      zone.addEventListener("dragover", (event) => {
+        event.preventDefault();
+        zone.classList.add("dragover");
+      });
+      zone.addEventListener("dragleave", () => zone.classList.remove("dragover"));
+      zone.addEventListener("drop", (event) => {
+        event.preventDefault();
+        zone.classList.remove("dragover");
+        if (event.dataTransfer.files.length) {
+          input.files = event.dataTransfer.files;
+          input.dispatchEvent(new Event("change"));
+        }
+      });
+    }
+
+    videoInput.addEventListener("change", () => updateFileLabel(videoInput, videoFile));
+    subtitleInput.addEventListener("change", () => updateFileLabel(subtitleInput, subtitleFile));
+
+    loginButton.addEventListener("click", async () => {
+      errorBox.textContent = "";
+      savedPath.textContent = "";
+      const response = await fetch("/api/turboscribe/login", { method: "POST" });
+      const payload = await response.json();
+      if (!response.ok) {
+        errorBox.textContent = payload.error || "Could not open TurboScribe login browser.";
+        return;
+      }
+      savedPath.textContent = "TurboScribe login browser opened. Log in once, then close it.";
+    });
+
+    statusButton.addEventListener("click", async () => {
+      errorBox.textContent = "";
+      const response = await fetch("/api/turboscribe/status");
+      const payload = await response.json();
+      savedPath.textContent = payload.message || "";
+    });
+
+    async function pollJob(jobId) {
+      const response = await fetch(`/api/jobs/${jobId}`);
+      const job = await response.json();
+      if (!response.ok) {
+        throw new Error(job.error || "Could not read job state.");
+      }
+
+      setProgress(job.progress, job.message);
+      if (job.status === "done") {
+        renderButton.disabled = false;
+        downloadButton.href = job.download_url;
+        downloadButton.hidden = false;
+        savedPath.textContent = job.saved_path ? `Saved: ${job.saved_path}` : "";
+        return;
+      }
+      if (job.status === "error") {
+        throw new Error(job.message || "Render failed.");
+      }
+      setTimeout(() => pollJob(jobId).catch(showError), 1200);
+    }
+
+    function showError(error) {
+      errorBox.textContent = error.message;
+      savedPath.textContent = "";
+      renderButton.disabled = false;
+      setProgress(0, "Waiting for upload");
+    }
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      errorBox.textContent = "";
+      savedPath.textContent = "";
+      downloadButton.hidden = true;
+      renderButton.disabled = true;
+      setProgress(1, "Uploading");
+
+      try {
+        const formData = new FormData(form);
+        const response = await fetch("/api/jobs", {
+          method: "POST",
+          body: formData,
+        });
+        const payload = await response.json();
+        if (!response.ok) {
+          throw new Error(payload.error || "Upload failed.");
+        }
+        setProgress(3, "Starting render");
+        await pollJob(payload.job_id);
+      } catch (error) {
+        showError(error);
+      }
+    });
+  </script>
+</body>
+</html>

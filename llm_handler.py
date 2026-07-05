@@ -27,11 +27,7 @@ def get_style_guide():
     """Returns a dictionary of all available styles and transitions."""
     return {
         "transitions": [
-            {"name": "slide_left", "sfx": "whoosh"},
-            {"name": "slide_right", "sfx": "whoosh"},
-            {"name": "push_up", "sfx": "whoosh"},
-            {"name": "push_down", "sfx": "whoosh"},
-            {"name": "flash_frame", "sfx": "light_sfx"},
+            {"name": "none", "sfx": None},
         ],
         "caption_styles": [
             {"name": "legmon_lustig", "font": "Montserrat Black", "animation_in": "snap_pop", "sfx_in": "pop"},
@@ -45,6 +41,175 @@ def get_style_guide():
 def format_transcript_for_llm(transcript):
     """Formats the word-level transcript into a single string for the LLM prompt."""
     return " ".join(word_info["word"].strip() for word_info in transcript)
+
+
+FALLBACK_IMPORTANCE_TERMS = {
+    "auszeichnet", "persoenlich", "interaktiv", "community", "passion", "dna",
+    "unternehmerische", "unternehmerisches", "denken", "handeln", "tipp",
+    "ausschliesst", "netzwerk", "moeglichkeiten", "beherzt", "nutzt",
+    "entscheidet", "wichtig", "besonders", "chance", "chancen", "vereint",
+    "alumnus", "masterprogramm", "finance", "strategieberatung",
+}
+
+FALLBACK_ENUMERATION_TERMS = {
+    "erstens", "zweitens", "drittens", "viertens", "fuenftens",
+    "einerseits", "andererseits", "zunaechst", "danach", "ausserdem",
+}
+
+
+def generate_fallback_editing_script(transcript, caption_style="legmon_reports"):
+    """Creates a local script when the LLM is unavailable.
+
+    The renderer keeps caption timing from the word-level transcript, so this only
+    supplies style, highlight windows, and sparse effect decisions.
+    """
+    if not transcript:
+        return {"music": {}, "clips": []}
+
+    grouped_words = []
+    current_group = []
+    current_block = transcript[0].get("block_index")
+
+    for word_info in transcript:
+        word = str(word_info.get("word", "")).strip()
+        if not word:
+            continue
+
+        block_index = word_info.get("block_index")
+        if current_group and block_index != current_block:
+            grouped_words.append(current_group)
+            current_group = []
+            current_block = block_index
+        current_group.append(word_info)
+
+    if current_group:
+        grouped_words.append(current_group)
+
+    clips = []
+    last_zoom_start = -999.0
+
+    for group in grouped_words:
+        words = [str(word_info.get("word", "")).strip() for word_info in group if str(word_info.get("word", "")).strip()]
+        if not words:
+            continue
+
+        start = float(group[0].get("start", 0.0))
+        end = float(group[-1].get("end", start))
+        highlights = _fallback_highlights(words)
+        is_question = _fallback_is_question(words)
+        is_enumeration = _fallback_is_enumeration_step(words)
+        is_concise = _fallback_is_concise_statement(words, start, end)
+        importance_score = _fallback_importance_score(words)
+        importance_zoom = (
+            not is_question
+            and (is_enumeration or (is_concise and importance_score >= 3))
+            and start - last_zoom_start >= 4.5
+        )
+        importance_zoom = False
+        zoom_scale = 1.05
+        if is_enumeration:
+            zoom_scale = min(1.20, 1.05 + 0.05 * _fallback_enumeration_index(words))
+
+        clips.append({
+            "start": start,
+            "end": end,
+            "transition_in": "none",
+            "transition_sfx": None,
+            "caption_style": caption_style,
+            "caption_text": " ".join(words[:6]),
+            "caption_sfx": None,
+            "highlight_words": highlights,
+            "importance_zoom": importance_zoom,
+            "importance_zoom_scale": zoom_scale,
+            "is_question": is_question,
+            "is_enumeration": is_enumeration,
+            "is_concise": is_concise,
+            "importance_score": importance_score,
+            "emojis": [],
+        })
+
+        if importance_zoom:
+            last_zoom_start = start
+
+    return {
+        "music": {},
+        "clips": clips,
+    }
+
+
+def _fallback_highlights(words):
+    highlights = []
+    seen = set()
+    for word in words:
+        normalized = _fallback_normalize(word)
+        if len(normalized) < 6 or normalized in seen:
+            continue
+        if normalized in {"gerne", "genau", "glaube", "immer", "erstmal", "spaeter", "heute", "neben"}:
+            continue
+        highlights.append(word.strip(".,!?;:"))
+        seen.add(normalized)
+        if len(highlights) >= 4:
+            break
+    return highlights
+
+
+def _fallback_normalize(word):
+    normalized = str(word).lower()
+    normalized = (
+        normalized
+        .replace("ä", "ae")
+        .replace("ö", "oe")
+        .replace("ü", "ue")
+        .replace("ß", "ss")
+    )
+    return "".join(char for char in normalized if char.isalnum())
+
+
+def _fallback_is_question(words):
+    text = " ".join(words).strip()
+    normalized = " ".join(_fallback_normalize(word) for word in words)
+    question_starters = (
+        "erzaehl", "was ist", "was macht", "warum", "wieso", "wie ", "wer ",
+        "du blickst", "die hhl ist ja",
+    )
+    return text.endswith("?") or normalized.startswith(question_starters)
+
+
+def _fallback_importance_score(words):
+    normalized_words = {_fallback_normalize(word) for word in words}
+    term_hits = len(normalized_words & FALLBACK_IMPORTANCE_TERMS)
+    score = term_hits * 3
+    if any(str(word).endswith(("!", ".")) for word in words):
+        score += 1
+    return score
+
+
+def _fallback_is_concise_statement(words, start, end):
+    if len(words) > 14:
+        return False
+    if end - start > 4.8:
+        return False
+    text = " ".join(words).strip()
+    return text.endswith((".", "!")) and len(words) >= 4
+
+
+def _fallback_is_enumeration_step(words):
+    normalized_words = [_fallback_normalize(word) for word in words]
+    if any(word in FALLBACK_ENUMERATION_TERMS for word in normalized_words):
+        return True
+    return any(word[:1].isdigit() and word.rstrip("0123456789") == "" for word in normalized_words[:2])
+
+
+def _fallback_enumeration_index(words):
+    normalized_words = [_fallback_normalize(word) for word in words]
+    order = ["erstens", "zweitens", "drittens", "viertens", "fuenftens"]
+    for index, token in enumerate(order):
+        if token in normalized_words:
+            return index
+    for token in normalized_words[:2]:
+        if token.isdigit():
+            return max(0, int(token) - 1)
+    return 0
 
 
 def _legmon_few_shots():
@@ -155,9 +320,12 @@ Core rules:
 2. Do not cut or shorten the video. Use original transcript timestamps only; the renderer keeps the full original video length.
 3. Choose one Legmon caption style per clip: legmon_lustig, legmon_reports, legmon_interview, or legmon_day_in_a_life.
 4. Add highlight_words for topic changes and core terms. The renderer rotates highlighted words through these colors: {", ".join(HIGHLIGHT_COLORS)}; all other caption words stay white. Do not output color values.
-5. Use emojis only from the fixed mapping below. Trigger an emoji only when a spoken word or close synonym clearly matches the mapping. Never trigger emojis more often than every 3-4 seconds across the whole video. Output the exact image filename from emoji_mapping.json.
-6. Keep emojis sparse. If in doubt, leave emojis empty for that clip.
-7. Keep caption_text punchy. Each rendered caption box is capped at 24 characters including spaces. Prefer 1-3 short words, or at most 3 short words plus 1 long word. Avoid filler so fast speech stays readable and synced.
+5. Add importance_zoom=true when an enumeration step starts or when a short, very concise statement lands. The visual should punch from 100% directly to 105%, not slowly zoom in.
+6. For enumerations, increase importance_zoom_scale by about 0.05 per step: first step 1.05, second 1.10, third 1.15. Keep this for clear list structures only.
+7. Do not add importance_zoom to interviewer questions, quick back-and-forth chatter, or purely setup lines. In interviews, zoom only on the answerer's concise standalone points.
+8. Use emojis only from the fixed mapping below. Trigger an emoji only when a spoken word or close synonym clearly matches the mapping. Never trigger emojis more often than every 3-4 seconds across the whole video. Output the exact image filename from emoji_mapping.json.
+9. Keep emojis sparse. If in doubt, leave emojis empty for that clip.
+10. Keep caption_text punchy. Each rendered caption box is capped at 24 characters including spaces. Prefer 1-3 short words, or at most 3 short words plus 1 long word. Avoid filler so fast speech stays readable and synced.
 
 Available transitions and caption styles:
 {json.dumps(style_guide, indent=2)}
@@ -181,13 +349,15 @@ JSON output structure:
   - caption_text: Caption text for this segment.
   - caption_sfx: Sound effect name for caption entrance.
   - highlight_words: Important exact words or short phrases from caption_text.
+  - importance_zoom: Boolean. True only when a standalone speaker point deserves a subtle speaker zoom-in. False for interviewer questions and setup lines.
+  - importance_zoom_scale: Number. Use 1.05 for normal concise hits; for enumeration steps use 1.05, 1.10, 1.15, etc.
   - emojis: List of emoji objects. Each emoji object MUST include:
     - image: Exact filename from emoji_mapping.json, e.g. "money-with-wings.png".
     - start, end: Absolute timestamps in the original video. Keep each visible about 0.8-1.4 seconds.
     - matched_word: Spoken word or close synonym that justified this emoji.
 
 Example clip:
-{{"start": 5.2, "end": 9.8, "transition_in": "slide_left", "transition_sfx": "whoosh", "caption_style": "legmon_reports", "caption_text": "Diese Frist entscheidet alles.", "caption_sfx": "tick", "highlight_words": ["Frist", "entscheidet"], "emojis": [{{"image": "clock.png", "start": 5.6, "end": 6.8, "matched_word": "Frist"}}]}}
+{{"start": 5.2, "end": 9.8, "transition_in": "none", "transition_sfx": null, "caption_style": "legmon_reports", "caption_text": "Diese Frist entscheidet alles.", "caption_sfx": "tick", "highlight_words": ["Frist", "entscheidet"], "importance_zoom": true, "emojis": [{{"image": "clock.png", "start": 5.6, "end": 6.8, "matched_word": "Frist"}}]}}
 """
 
     user_prompt = f"""Create a complete Legmon-style JSON editing script for this transcript.

@@ -23,6 +23,8 @@ dist/
 /output/
 /roh_videos/
 /finished_videos/
+/web_jobs/
+/turboscribe_profile/
 
 # Temporary files
 temp_audio.mp3

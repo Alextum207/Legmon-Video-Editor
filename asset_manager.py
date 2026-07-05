@@ -9,6 +9,17 @@ PEXELS_API_KEY = os.getenv("PEXELS_API_KEY")
 PIXABAY_API_KEY = os.getenv("PIXABAY_API_KEY")
 
 ASSET_DIR = "assets"
+LOCAL_SFX_DIR = os.path.join(ASSET_DIR, "sfx")
+LOCAL_SFX = {
+    "importance_zoom": "deep_wosh.mp4",
+    "opening_hit": "dragon_studio_ding.mp3",
+    "keyword_ping": "dragon_studio_ding.mp3",
+    "topic_wosh": "deep_wosh.mp4",
+    "topic_riser": "risers.mp4",
+    "deep_wosh": "deep_wosh.mp4",
+    "riser": "risers.mp4",
+    "ding": "dragon_studio_ding.mp3",
+}
 if not os.path.exists(ASSET_DIR):
     os.makedirs(ASSET_DIR)
 
@@ -66,6 +77,11 @@ def get_audio_asset(api_key, query, media_type):
         return None
 
 def get_sfx(effect_name):
+    local_filename = LOCAL_SFX.get(str(effect_name).strip().lower())
+    if local_filename:
+        local_path = os.path.join(LOCAL_SFX_DIR, local_filename)
+        if os.path.exists(local_path):
+            return local_path
     return get_audio_asset(PIXABAY_API_KEY, f"{effect_name} sound", "audio")
 
 def get_music(mood):
